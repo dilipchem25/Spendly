@@ -2,6 +2,63 @@
 
 {% block title %}Spendly — Track Every Rupee{% endblock %}
 
+{# ----- How to Use video modal: scoped styles (prefixed .howto-*) ----- #}
+{% block head %}
+<style>
+    .howto-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: rgba(15, 15, 15, 0.72);
+    }
+
+    .howto-overlay[hidden] { display: none; }
+
+    .howto-dialog {
+        position: relative;
+        width: 100%;
+        max-width: 560px;
+        background: #000;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+    }
+
+    .howto-video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        max-height: 80vh;
+        object-fit: contain;
+        background: #000;
+    }
+
+    .howto-close {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        width: 2rem;
+        height: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        border: none;
+        border-radius: 50%;
+        font-size: 1.4rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .howto-close:hover { background: rgba(0, 0, 0, 0.85); }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <section class="hero">
@@ -17,7 +74,8 @@
         </p>
         <div class="hero-actions">
             <a href="{{ url_for('register') }}" class="btn-primary">Create free account</a>
-            <a href="{{ url_for('login') }}" class="btn-primary">See how it works</a>
+            <button type="button" class="btn-primary" id="howtoTrigger"
+                    aria-haspopup="dialog" aria-controls="howtoOverlay">See how it works</button>
         </div>
     </div>
     <div class="hero-visual">
@@ -76,4 +134,53 @@
     </div>
 </section>
 
+{# ----- How to Use video modal: markup (opened by the hero "See how it works" button) ----- #}
+<div class="howto-overlay" id="howtoOverlay" role="dialog" aria-modal="true"
+     aria-label="How to use Spendly" hidden>
+    <div class="howto-dialog">
+        <button type="button" class="howto-close" id="howtoClose" aria-label="Close video">&times;</button>
+        <!-- TODO: replace VIDEO_URL_PLACEHOLDER with the real how-to video URL -->
+        <video class="howto-video" id="howtoVideo" controls preload="none"
+               src="VIDEO_URL_PLACEHOLDER">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+</div>
+
+{% endblock %}
+
+{# ----- How to Use video modal: open/close logic (vanilla JS, no deps) ----- #}
+{% block scripts %}
+<script>
+    (function () {
+        var overlay = document.getElementById('howtoOverlay');
+        var trigger = document.getElementById('howtoTrigger');
+        var closeBtn = document.getElementById('howtoClose');
+        var video = document.getElementById('howtoVideo');
+
+        function openModal() {
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
+        }
+
+        function closeModal() {
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+            video.pause();
+            trigger.focus();
+        }
+
+        trigger.addEventListener('click', openModal);
+        closeBtn.addEventListener('click', closeModal);
+
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) closeModal();
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !overlay.hidden) closeModal();
+        });
+    })();
+</script>
 {% endblock %}
