@@ -95,3 +95,31 @@ def create_user(name, email, password):
         return cur.lastrowid
     finally:
         conn.close()
+
+
+def get_user_by_id(user_id):
+    conn = get_db()
+    user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return user
+
+
+def update_user_name(user_id, name):
+    conn = get_db()
+    try:
+        conn.execute("UPDATE users SET name = ? WHERE id = ?", (name, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_user_password(user_id, password_hash):
+    """Store an already-hashed password for the given user."""
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()

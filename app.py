@@ -1,6 +1,8 @@
 import os
 import re
 import sqlite3
+from datetime import datetime
+from functools import wraps
 
 from flask import (
     Flask,
@@ -11,9 +13,18 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
-from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
+from database.db import (
+    create_user,
+    get_db,
+    get_user_by_email,
+    get_user_by_id,
+    init_db,
+    seed_db,
+    update_user_name,
+    update_user_password,
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
@@ -37,12 +48,8 @@ COMMON_PASSWORDS = {
 }
 
 
-def validate_registration(name, email, password):
-    """Return an error message, or None when the details are valid."""
-    if not name:
-        return "Please enter your name."
-    if not EMAIL_RE.match(email):
-        return "Please enter a valid email address."
+def validate_password(password):
+    """Return an error message, or None when the password is strong enough."""
     if len(password) < 8:
         return "Password must be at least 8 characters."
     if not (re.search(r"[A-Za-z]", password) and re.search(r"\d", password)):
@@ -50,6 +57,25 @@ def validate_registration(name, email, password):
     if password.lower() in COMMON_PASSWORDS:
         return "That password is too common. Please choose another one."
     return None
+
+
+def validate_registration(name, email, password):
+    """Return an error message, or None when the details are valid."""
+    if not name:
+        return "Please enter your name."
+    if not EMAIL_RE.match(email):
+        return "Please enter a valid email address."
+    return validate_password(password)
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Please sign in to continue.")
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapped
 
 
 # ------------------------------------------------------------------ #
@@ -116,6 +142,47 @@ def logout():
     return redirect(url_for("landing"))
 
 
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        if not name:
+            flash("Please enter your name.")
+        else:
+            update_user_name(session["user_id"], name)
+            session["user_name"] = name
+            flash("Profile updated.")
+        return redirect(url_for("profile"))
+
+    user = get_user_by_id(session["user_id"])
+    member_since = datetime.strptime(
+        user["created_at"][:19], "%Y-%m-%d %H:%M:%S"
+    ).strftime("%d %b %Y")
+    return render_template("profile.html", user=user, member_since=member_since)
+
+
+@app.route("/profile/password", methods=["POST"])
+@login_required
+def update_password():
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+
+    user = get_user_by_id(session["user_id"])
+    if not check_password_hash(user["password_hash"], current_password):
+        flash("Current password is incorrect.")
+        return redirect(url_for("profile"))
+
+    error = validate_password(new_password)
+    if error:
+        flash(error)
+        return redirect(url_for("profile"))
+
+    update_user_password(user["id"], generate_password_hash(new_password))
+    flash("Password updated.")
+    return redirect(url_for("profile"))
+
+
 @app.route("/terms")
 def terms():
     return render_template("terms.html")
@@ -129,11 +196,6 @@ def privacy():
 # ------------------------------------------------------------------ #
 # Placeholder routes — students will implement these                  #
 # ------------------------------------------------------------------ #
-
-@app.route("/profile")
-def profile():
-    return "Profile page — coming in Step 4"
-
 
 @app.route("/expenses/add")
 def add_expense():
