@@ -1,7 +1,6 @@
 import os
 import re
 import sqlite3
-from datetime import datetime
 from functools import wraps
 
 from flask import (
@@ -13,18 +12,9 @@ from flask import (
     session,
     url_for,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.security import check_password_hash
 
-from database.db import (
-    create_user,
-    get_db,
-    get_user_by_email,
-    get_user_by_id,
-    init_db,
-    seed_db,
-    update_user_name,
-    update_user_password,
-)
+from database.db import create_user, get_db, get_user_by_email, init_db, seed_db
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-change-in-production")
@@ -76,6 +66,60 @@ def login_required(view):
             return redirect(url_for("login"))
         return view(*args, **kwargs)
     return wrapped
+
+
+# ------------------------------------------------------------------ #
+# Hardcoded profile data                                              #
+# Step 4 is a UI-first mockup — wired up to real queries in Step 5.   #
+# ------------------------------------------------------------------ #
+
+PROFILE_USER = {
+    "initials": "DU",
+    "name": "Demo User",
+    "email": "demo@spendly.com",
+    "member_since": "01 Jan 2025",
+}
+
+PROFILE_STATS = {
+    "total_spent": "₹12,450",
+    "transaction_count": 24,
+    "top_category": "Food",
+}
+
+
+# Maps each category to one of the badge-color modifier classes defined in
+# style.css (.category-badge--accent / --accent-2 / --danger / --neutral).
+CATEGORY_BADGES = {
+    "Food": "accent",
+    "Entertainment": "accent",
+    "Transport": "accent-2",
+    "Health": "accent-2",
+    "Bills": "danger",
+    "Shopping": "danger",
+    "Other": "neutral",
+}
+
+PROFILE_TRANSACTIONS = [
+    {"date": "05 Jan 2025", "description": "Grocery shopping", "category": "Food", "amount": "₹1,200"},
+    {"date": "04 Jan 2025", "description": "Uber ride", "category": "Transport", "amount": "₹350"},
+    {"date": "03 Jan 2025", "description": "Electricity bill", "category": "Bills", "amount": "₹2,100"},
+    {"date": "02 Jan 2025", "description": "Movie night", "category": "Entertainment", "amount": "₹600"},
+    {"date": "01 Jan 2025", "description": "Pharmacy", "category": "Health", "amount": "₹450"},
+]
+for _txn in PROFILE_TRANSACTIONS:
+    _txn["badge"] = CATEGORY_BADGES[_txn["category"]]
+
+PROFILE_CATEGORY_BREAKDOWN = [
+    {"category": "Food", "amount": "₹4,200", "percent": 34},
+    {"category": "Bills", "amount": "₹3,100", "percent": 25},
+    {"category": "Transport", "amount": "₹1,800", "percent": 14},
+    {"category": "Shopping", "amount": "₹1,500", "percent": 12},
+    {"category": "Entertainment", "amount": "₹950", "percent": 8},
+    {"category": "Health", "amount": "₹600", "percent": 5},
+    {"category": "Other", "amount": "₹300", "percent": 2},
+]
+for _cat in PROFILE_CATEGORY_BREAKDOWN:
+    _cat["badge"] = CATEGORY_BADGES[_cat["category"]]
 
 
 # ------------------------------------------------------------------ #
@@ -142,45 +186,16 @@ def logout():
     return redirect(url_for("landing"))
 
 
-@app.route("/profile", methods=["GET", "POST"])
+@app.route("/profile")
 @login_required
 def profile():
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        if not name:
-            flash("Please enter your name.")
-        else:
-            update_user_name(session["user_id"], name)
-            session["user_name"] = name
-            flash("Profile updated.")
-        return redirect(url_for("profile"))
-
-    user = get_user_by_id(session["user_id"])
-    member_since = datetime.strptime(
-        user["created_at"][:19], "%Y-%m-%d %H:%M:%S"
-    ).strftime("%d %b %Y")
-    return render_template("profile.html", user=user, member_since=member_since)
-
-
-@app.route("/profile/password", methods=["POST"])
-@login_required
-def update_password():
-    current_password = request.form.get("current_password", "")
-    new_password = request.form.get("new_password", "")
-
-    user = get_user_by_id(session["user_id"])
-    if not check_password_hash(user["password_hash"], current_password):
-        flash("Current password is incorrect.")
-        return redirect(url_for("profile"))
-
-    error = validate_password(new_password)
-    if error:
-        flash(error)
-        return redirect(url_for("profile"))
-
-    update_user_password(user["id"], generate_password_hash(new_password))
-    flash("Password updated.")
-    return redirect(url_for("profile"))
+    return render_template(
+        "profile.html",
+        user=PROFILE_USER,
+        stats=PROFILE_STATS,
+        transactions=PROFILE_TRANSACTIONS,
+        category_breakdown=PROFILE_CATEGORY_BREAKDOWN,
+    )
 
 
 @app.route("/terms")
